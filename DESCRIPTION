@@ -1,0 +1,32 @@
+Package: pprincrt
+Type: Package
+Title: Bayesian Power Prior Design and Analysis of Cluster Randomized Trials
+Version: 1.0.1
+Author: Shan Xiao
+Imports:
+    FNN,
+    R2OpenBUGS,
+    coda,
+    stats,
+    base,
+    utils,
+    snow,
+    doSNOW,
+    graphics,
+    foreach,
+    animation,
+    grDevices,
+    stringr,
+    pander
+Depends:
+    R (>= 3.2.0)
+Maintainer: Shan Xiao <xiaoshanseu@gmail.com>
+Description: Incoporation of historical information in the design and analysis of cluster randomized trials
+            with power prior method as described in S. Xiao, W.Z., Tu, and S.G., Lourens (2017) <http://hdl.handle.net/1805/14611>. 
+License: GPL-2
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 6.0.1
+Suggests: knitr,
+    rmarkdown
+VignetteBuilder: knitr

@@ -1,0 +1,286 @@
+---
+title: 'pprincrt: A Package for Design and Analysis of Cluster Randomized Trials with Power Prior Method'
+author: "Shan Xiao"
+date: '`r Sys.Date()`'
+output: 
+     pdf_document:
+         number_sections: false
+         toc: false
+bibliography: myref.bib
+
+documentclass: article
+fontsize: 10pt 
+geometry: margin=1in
+
+header-includes:
+- \usepackage{setspace}\onehalfspacing
+- \usepackage{booktabs}
+- \usepackage{sectsty} \sectionfont{\centering}
+- \usepackage{animate}
+vignette: |
+  %\VignetteIndexEntry{R packages: Static PDF and HTML vignettes}  %\VignetteEngine{R.rsp::asis}  %\VignetteKeyword{PDF}  %\VignetteKeyword{HTML}  %\VignetteIndexEntry{pprincrt} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
+---
+
+# Introduction 
+
+Cluster randomized trials are widely used in clinical trials [@Campbell2000; @Campbell2007]. With this design, clusters of participants in a trial are randomly assigned to different treatment arms, and all subjects within each cluster receive the same treatment. Trials outcomes, however, are typically assessed at the subject level, as in individual randomized trials. Cluster randomized trials are usually chosen for practical reasons [@Donner1998], such as convenience of implementation, or minimization of contamination, etc. But the practical appeal of cluster randomization is retained at the expense of a much reduced analytical power. This is because, in cluster randomized trials, the subjects within each cluster are correlated, and therefore, the variance of the effect size is increased [@Hemming2011]. Methods for improving analytical power of cluster randomized trials becomes a study of great practical importance. One proposed method is to borrow strength from similar historical data.
+
+The idea of borrowing information from historical data is not new. Using information
+from previous trials of similar interventions to boost the power of the current trial
+is intuitively an appealing idea [@Viele2014]. Philosophically, such an approach is no different from meta analysis, which seeks to quantify an unknown treatment effect by combining all existing trials on the same or similar interventions [@Donner2001; @Donner2002]. Alternatively, one could approach the problem from the perspective of hierarchical Bayes, by formulating the prior distributions based on historical data [@Spiegelhalter2001; @Turner2001;  @Clark2010]. Specifically, a frequently used method is to determine the prior parameters from historical data [@Goodman2005; @Turner2005; @Hobbs2007; @Schoenfeld2009; @Hampson2014]. To prevent an overwhelming influence of the historical data, several researchers developed the idea of discounting the historical information. Magnitude of the discount is quantified by a power parameter (also discounting parameter) associated with the prior density, and thus leading to the concept of power prior [@Duan2005; @Zhang2010; @Ibrahim2015]. 
+
+An essential question concerning the use of power prior is to determine the discounting paramater. In the absence of a generally accepted mechanism for determination of this parameter, a reasonable approach is to adopt a data-driven method that directly evaluates the resemblance of the distributions of the data sources. In this research, we propose to use the Kullback-Leibler (KL) divergence measure to quantify the distance between the current and historical data, and then use this distance measure to determine the amount of discounting of historical data. A greater KL divergence indicates a larger discrepancy, and thus less incentive to place great weight on the historical information. To implement, we propose to use the KL divergence as the discounting parameter in a likelihood framework.
+
+In this vignette, we give a brief introduction to our method in Section $2$. Then in Section $3$, we describe the structure of the package  **pprincrt**. For the illustrative purpose of this package, we introduce two examples in Section $4$. In Section $5$, we demonstrate the use of the package **pprincrt**. 
+
+# Method
+
+This method could work in very general situations of cluster randomized trials, with multiple arms, balanced or imbalanced in sample size and multiple types of data following the exponential family of distributions. In principle, we could implement it with two steps. In the first step, we determine the discounting parameter with KL divergence measure. In the second step, we construct the power prior with the pre-determined discounting parameter, and then use the current data likelihood to update it through Bayes formula to get the posterior for estimation. 
+
+## Determination of discounting parameter
+
+We assume the current trial is a cluster randomized trial with $P$ arms, including one placebo arm and $P-1$ treatment arms. The current trial data come from each subject, and we denote them as  $\boldsymbol{D}=\{(Y_{ij}, X_{1i}, X_{2i},\cdots,X_{P-1i}):i=1,2,\cdots, I, j=1,2,\cdots, J_{i}\}$, where $i$ and $j$ are the cluster and subject indicators, respectively. $Y_{ij}$ is the outcome of subject $j$ in cluster $i$. $X_{1i}, X_{2i},\cdots,X_{P-1i}$ are the $P-1$ dummy variables for the treatment status of cluster $i$. If cluster $i$ is in the placebo arm, then all dummy variables take value $0$. If cluster $i$ is in treatment arm $p, p=1,2,\cdots, P-1$, then all dummy variables take value $0$ except $X_{pi}$, which takes value $1$. We assume the outcome $Y_{ij}$ follows an exponential family distribution as,
+
+$$f(Y_{ij}|b_{i})=\textrm{exp}\{\frac{Y_{ij}\eta_{i}-d(\eta_{i})}{a(\phi)}+c(Y_{ij},\phi)\}, $$
+
+where $\eta_{i}$ is the natural parameter, and $\phi$ is the nuisance parameter. We let $\mu_{i}$ be the conditional mean of $Y_{ij}$ given $b_{i}$, and it is related to $\eta_{i}$ through a monotone, invertible link function $k(\cdot)$. We consider the generalized linear mixed model (GLMM) as below, 
+$$\eta_{i}=k(\mu_{i})=\beta_{0}+\boldsymbol{X}^{T}_{i}\boldsymbol{\beta}+b_{i},$$
+where $\boldsymbol{X}^{T}_{i}=(X_{1i},X_{2i},\ldots,X_{P-1i})$, $\boldsymbol{\beta}=(\beta_{1},\beta_{2},\ldots,\beta_{P-1})^{T}$ is a $(P-1) \times 1$ coefficient vector, and $b_{i}$ is the $i$th cluster-specific random effect. We fit the GLMM under non-informative prior within Bayesian framework, and therefore evaluate the posterior of the treatment effects $\boldsymbol{\beta}$, denoted by $f(\boldsymbol{\beta}|\boldsymbol{D})$. 
+
+On the other hand, we assume the historical trial is a simple randomized trial with the same number of arms and the same type of outcome. The historical data, however, is summary data at the treatment group level. We denote them as $\boldsymbol{D_{0}}=\{(Z_{l}, N_{l}, X_{1l}^{\prime}, X_{2l}^{\prime},\cdots, X_{P-1l}^{\prime} ):l=1,2,\cdots,P\}$, where $l$ is the treatment group indicator, $N_{l}$ is the number of subjects in arm $l$, and $Z_{l}$ is the sum of outcome in arm $l$. $Z_{l}=\sum_{i=1}^{N_{l}}Z_{il}$, where $Z_{il}, i=1,2,\cdots, N_{l}$ are the (unobserved) individual outcome in arm $l$. The probability density function of $Z_{il}$ could be written as, 
+$$g(Z_{il})=\textrm{exp}\{\frac{Z_{il}\eta_{l}^{\prime}-d(\eta_{l}^{\prime})}{a(\phi^{\prime})}+c(Z_{il},\phi^{\prime})\},$$
+where $\eta_{l}^{\prime}$ is the natural parameter, and $\phi^{\prime}$ is the nuisance parameter. Therefore, the probability density function of $Z_{l}$ is, 
+$$g(Z_{l})=\idotsint \textrm{exp}\{\frac{Z_{l}\eta_{l}^{\prime}-N_{l}d(\eta_{l}^{\prime})}{a(\phi^{\prime})}\}\textrm{exp}\{\sum_{i=1}^{N_{l}-1}c(Z_{il},\phi^{\prime})+c(Z_{l}-\sum_{i=1}^{N_{l}-1}Z_{il},\phi^{\prime})\}\,dZ_{1l}\dots\,dZ_{N_{l}-1 l}.$$
+If the individual outcome is normal, count or binary, $Z_{l}$ follows $\textrm{N}(N_{l}\eta_{l}^{\prime},N_{l}a(\phi^{\prime}))$, $\textrm{Poisson}(N_{l}\textrm{exp}(\eta_{l}^{\prime}))$ or $\textrm{Binomial}(N_{l},\textrm{logit}^{-1}(\eta_{l}^{\prime}))$, respectively.
+We let $\mu^{\prime}_{l}$ be the mean of $Z_{il}$, or equivalently the mean of $\frac{Z_{l}}{N_{l}}$, and it is related to $\eta^{\prime}_{l}$ through the monotone, invertible link function $k(\cdot)$. We consider the generalized linear model (GLM) as below, 
+$$\eta_{l}^{\prime}=k(\mu_{l}^{\prime})=\beta_{0}^{\prime}+\boldsymbol{X}^{\prime T}_{l}\boldsymbol{\beta^{\prime}},$$
+where $\boldsymbol{X}_{l}^{\prime T}=(X_{1l}^{\prime},X_{2l}^{\prime},\ldots,X_{P-1l}^{\prime})$, $\boldsymbol{\beta^{\prime}}=(\beta_{1}^{\prime},\beta_{2}^{\prime},\ldots,\beta_{P-1}^{\prime})^{T}$ is a $(P-1) \times 1$ coefficient vector. We fit the GLM model under non-informative prior in the framework of Bayesian statistics, and therefore evaluate the posterior of the treatment effects $\boldsymbol{\beta^{\prime}}$, denoted by $g(\boldsymbol{\beta^{\prime}}|\boldsymbol{D_{0}})$.
+
+Since the two posteriors are derived under non-informative priors, they are not
+influenced by external data other than the current and historical trial information.
+From this, we ascertain the symmetric and asymmetric KL divergence measures, and
+use them to quantify the similarity of the two data sources.
+
+$$D_{KL}^{\textrm{sym}}(f||g)=\textrm{E}_{f}\{\log(\frac{f}{g})\}+\textrm{E}_{g}\{\log(\frac{g}{f})\},$$
+$$D_{KL}^{\textrm{asym}}(f||g)=\textrm{E}_{f}\{\log(\frac{f}{g})\}.$$
+where $f$ and $g$ stand for $f(\boldsymbol{\beta}|\boldsymbol{D})$ and $g(\beta^{\prime}|\boldsymbol{D}_{0})$, and $E_{f}\{\cdot\}$ and $E_{g}\{\cdot\}$ are the expectations taken with respect to $f$ and $g$, respectively.
+
+Under such a setup, we propose the following discounting fractions
+$$a^{\textrm{sym}}=e^{-D_{KL}^{\textrm{sym}}(f||g)}=e^{-D_{KL}^{\textrm{sym}}(g||f)},$$
+$$a^{\textrm{asym}}=e^{-D_{KL}^{\textrm{asym}}(f||g)}.$$
+The two KL divergence measures are not easy to compute by definition, we therefore
+use the k-Nearest Neighbor (k-NN) algorithm for calculation [@Wang2009; @Beygelzimer2013].
+
+## Estimation of treatment effect
+
+We assume the $p$th $,p=1,2,\ldots,P-1$ treatments in the two trials are the same or similar, so it is reasonable to allow the historical strength to be borrowed through $\beta_{p}^{\prime}$ in the estimation of $\beta_{p}$. We let $\boldsymbol{\beta}_{p}=(\beta_{p},\beta_{p}^{\prime})$, and we assume it follows a bivariate normal distribution $h_{p}(\boldsymbol{\beta}_{p}|\boldsymbol{m}_{p},\boldsymbol{\Lambda}_{p})$. We assume $\beta_{p}$ and $\beta_{p}^{\prime}$ are exchangeable, then the mean vector $\boldsymbol{m}_{p}=\mu_{p}(1,1)^{\prime}$, and the $2 \times 2$ precision matrix
+$\boldsymbol{\Lambda_{p}}=\tau_{p}\begin{bmatrix}
+1&\rho_{p}\\
+\rho_{p}&1
+\end{bmatrix}^{-1}$. Furthermore, we assume $\mu_{p}$, $\tau_{p}$ and $\rho_{p}$ follow the hyper-priors as below,
+$$
+h_{p}(\mu_{p}|a_{p},R_{p})=\sqrt{\frac{R_{p}}{2\pi}}e^{-\frac{R_{p}}{2}(\mu_{p}-a_{p})^{2}},
+$$
+$$
+h_{p}(\tau_{p}|\kappa_{p},\nu_{p})=\frac{\nu_{p}^{\kappa_{p}}}{\Gamma(\kappa_{p})}\tau_{p}^{\kappa_{p}-1}e^{-\nu_{p}\tau_{p}},
+$$
+$$
+h_{p}(\rho_{p}|c_{p},d_{p})=\frac{\rho_{p}^{c_{p}-1}(1-\rho_{p})^{d_{p}-1}}{B(c_{p},d_{p})},
+$$
+where $\Gamma(\cdot)$ and $B(\cdot,\cdot)$ are respectively Gamma and Beta functions. Therefore, we could write the power prior of $\boldsymbol{\beta}$ as below, 
+
+\begin{equation*}
+\begin{split}
+h(\boldsymbol{\beta}|\boldsymbol{D}_{0},a) & \propto \idotsint \{\int (L(\beta_{0}^{\prime},\boldsymbol{\beta}^{\prime}|\boldsymbol{D}_{0})^{a} g(\beta_{0}^{\prime}) \, d\beta_{0}^{\prime}\} \prod_{p=1}^{P-1}\{ h_{p} (\boldsymbol{\beta_{p}}|\boldsymbol{m}_{p},\boldsymbol{\Lambda}_{p}) \\
+& h_{p}(\mu_{p}|a_{p},R_{p})h_{p}(\tau_{p}|\kappa_{p},\nu_{p})h_{p}(\rho_{p}|c_{p},d_{p})\}\,d\boldsymbol{\beta}^{\prime}\,d\boldsymbol{\mu}\,d\boldsymbol{\tau}\,d\boldsymbol{\rho},
+\end{split}
+\end{equation*}
+
+where $\boldsymbol{\mu}=(\mu_{1},\mu_{2},\ldots,\mu_{P-1})$, $\boldsymbol{\tau}=(\tau_{1},\tau_{2},\ldots,\tau_{P-1})$ and $\boldsymbol{\rho}=(\rho_{1},\rho_{2},\ldots,\rho_{P-1})$, $L(\beta_{0}^{\prime},\boldsymbol{\beta}^{\prime}|\boldsymbol{D}_{0})$ and $g(\beta_{0}^{\prime})$ are the likelihood and prior density function of $\beta_{0}^{\prime}$ and $\boldsymbol{\beta}^{\prime}$ in the GLM model. With this power prior, we could derive the posterior of $\boldsymbol{\beta}$ as below,
+
+$$h(\boldsymbol{\beta}|\boldsymbol{D},\boldsymbol{D}_{0},a) \propto  \idotsint \{ L(\beta_{0},\boldsymbol{\beta}|\boldsymbol{D},\boldsymbol{b})f(\boldsymbol{b}|\tau_{b})f(\beta_{0})f(\tau_{b})
+\,d\boldsymbol{b}\,d\beta_{0}\,d\tau_{b}\}h(\boldsymbol{\beta}|\boldsymbol{D}_{0},a),$$
+
+where $L(\beta_{0},\boldsymbol{\beta}|\boldsymbol{D},\boldsymbol{b})$, $f(\boldsymbol{b}|\tau_{b})$, $f(\beta_{0})$ and $f(\tau_{b})$ are the likelihood function and priors in the GLMM model.  
+
+Since the three posteriors $f(\boldsymbol{\beta}|\boldsymbol{D})$, $g(\boldsymbol{\beta^{\prime}}|\boldsymbol{D}_{0})$, $h(\boldsymbol{\beta}|\boldsymbol{D},\boldsymbol{D}_{0},a)$ do not have
+closed forms, we use a Metropolis Hastings (MH) algorithm within Gibbs sampling
+to draw samples from the posteriors [@Gamerman1997; @Chib1999; @Lunn2009; @Robert2009]. Treatment effect estimates are then obtained
+from the appropriate summary statistics of the posterior samples.
+
+# Package structure
+
+The **pprincrt** package has two main functions, $pprmodelBUGS()$ and $SimPower()$. The former implements the Bayesian power prior analysis for cluster randomized trials, and
+the latter implements power calculation through simulation. The functions are able
+to incorporate historical trial information in both data analysis and trial design through power prior analysis.
+Additionally, the package provides two utility functions: $print.pprMod()$, which prints model fitting results in an easy to read format, and $AniPlot()$, which provides an animated presentation of estimated power and type 1 error rates. 
+
+## Function **_pprmodelBUGS()_** 
+
+Function _pprmodelBUGS()_ executes a series of tasks ``under the hood'', outlined in order of implementation below,  
+
+- Write the file _'cmodelfile.txt'_ into the file directory. It is the BUGS script of the GLMM model for the current trial data. 
+
+- Use the function _bugs()_ in the **R2OpenBUGS** package to call OpenBUGS from R and to analyze the current trial data with the model in _'cmodelfile.txt'_ through batch mode [@Spiegelhalter2007].  
+
+- Write the file _'hmodelfile.txt'_ into the file directory. It is the BUGS script of the GLM model for the historical trial data. 
+
+- Use the function _bugs()_ in the **R2OpenBUGS** package to call OpenBUGS from R and to analyze the historical trial data with the model in _'hmodelfile.txt'_ through batch mode. 
+
+- Write the file _'pprmodelfile.txt'_ into the file directory. It is the BUGS script of the power prior model for both current and historical trial data. 
+
+In function _pprmodelBUGS()_, the file directory is set to be _'tempdir()'_ by default, but the users may change this through the argument _file.dir_. All files are removed after OpenBUGS is done if the argument _file.rm_ is set to _TRUE_. However, the default value is set to _FALSE_. For the current trial, the data are input through the argument _cData_, while the analytical model is specified by the argument _cForm_. _cData_ is a data frame, and _cForm_ is a formula object. The variable names in _cData_ must be the same as those in _cForm_. Besides, _hData_ and _hForm_ are similar arguments to _cData_ and _cForm_, but for data input and model specification of the historical trial. 
+
+The current package runs on the Windows platform. The OpenBUGS directory could be specified by the user through the argument _OpenBUGS.dir_, which is the directory where the OpenBUGS software is installed. By default, it is set to be _NULL_, which means that the most recent OpenBUGS version registered in the Windows registry will be used. The pseudo random number generator in OpenBUGS has $14$ different internal states. Each state is $10^{12}$ draws apart to avoid overlap in the pseudo random number sequences [@Spiegelhalter2007]. The state could be pre-specified through the argument _OpenBUGS.seed_ by setting its value to be an interger between $1$ and $14$. By default, it is set to be $1$. 
+
+In function _pprmodelBUGS()_, one MCMC chain of length $2,000$ is generated. We discard the first half of 
+the generated values and we do not use thinning. The user may change the default values for the number of chains, the number of iteration, the number of burn-in and the thinning parameter through arguments _nchain_, _niter_, _nburnin_, _nthin_, respectively. Two different discounting methods are allowed: by the symmetric and asymmetric KL divergence based discounting parameters, or by an expert proposed proportion (between $0$ and $1$). The discounting method is specified by the argument _weight_.
+
+Function _pprmodelBUGS()_ returns an S3 class object _pprMod_ containing the posterior samples of the treatment effect, which can be further processed with the **coda** package. In addition, the object contains summaries of the posterior samples, including the posterior median, standard deviation, and the highest posterior density (HPD) interval. The credible level of the HPD interval is specified by argument _cover.level_. An estimate of the discounting parameter is also included in the object. Convergence diagnostic statistics are also presented, including trace plot, and the Gelman-Rubin statistic and related plots if two or more MCMC chains are run. All diagnostic plots are contained in file _'graphics.pdf'_ under the directory specified by the argument _file.dir_.
+
+## Function **_SimPower()_**
+
+Function _SimPower()_ is used to determine the sample size in designing a new cluster randomized trial with the proposed method given a historical data or a specific historical trial parameter setting. It may also be used to assess the power of the proposed method under a pre-specified parameter setting for both current and historical trials. The desired result is specified by argument _to.do.option_. It takes value $real\_SSD$, $sim\_SSD$ or $sim\_power$ for the three aforementioned aims, respectively. When argument _to.do.option_ takes value $real\_SSD$, function _SimPower()_ executes a series of tasks ``under the hood'', outlined in order of implementation below,
+
+- Identify the pre-specified historical trial data. 
+
+- Generate multiple curren trial data replicates under an experimental sample size. 
+
+- Analyze each current trial data with power prior method by borrowing information from that historical trial data, and output the HPD interval of the treatment effect. 
+
+- Use the HPD interval to make a decision whether to reject the null hypothesis of non-significant treatment effect.
+
+- Report the proportion of rejection among the decisions as power.
+
+If the power returned by function _SimPower()_ is not the target one, then we should try another sample size and repeat the process above with function _SimPower()_ until the target power is obtained, and then we could report the corresponding sample size to people. When argument _to.do.option_ takes value $sim\_SSD$, function _SimPower()_ works similarly. The only difference is, in the first step, we should generate one historical trial data with the pre-specified historical trial parameter setting, instead. When argument _to.do.option_ takes value $sim\_power$, the first three steps are changed to the following two steps, 
+
+- Generate multiple pairs of current and historical data replicates under the pre-specified current and historical trial setting. 
+
+- For each pair of data replicates, analyze the current trial data with power prior method by borrowing information from the historical trial data, and output the HPD interval of the treatment effect.
+
+In this case, the power returned by function _SimPower()_ is reported to people, directly. 
+
+As shown above, multiple replicates of current trial data or historical trial data might be generated. The number of data replicates is specified by argument _Rep_. The arguments _cRdmSeed.init_ and _hRdmSeed.init_ are used to specify the random seeds for the generation of the first current trial data and the first historical trial data, respectively. Both random seeds increase by $1$ for each of the following trial data. In concept, the computations on different data replicates are similar and independent, so they could be done on different cores of the same computer simultaneously, thereby reducing the computational time. Therefore, we allow parallel computing via the **foreach** package in this function. 
+
+Multiple files will be yielded in the file directory as a result of the computation on each data replicate, such as _'hmodelfile.txt'_, _'cmodelfile.txt'_, _'pprmodelfile.txt'_ and _'graphics.pdf'_. For the concern of space, all these files are removed by default after the computation is done. This default value could be changed by setting the argument _file.rm=FALSE_. Similar to function _pprmodelBUGS()_, the same arguments are provided in function _SimPower()_ to specify the OpenBUGS directory, the MCMC chain features, the discounting parameter and the HPD interval. Additionally, when _to.do.option_ takes value $real\_SSD$, the historical trial data should be specified in the format of data frame through the argument _hData_, and the variable names in the data frame should be the same as those specified in the arguments _hTrtVar_, _hOutcomeVar_ and _hSumVar_. When _to.do.option_ takes value $sim\_SSD$ or $sim\_power$, the historical trial parameter setting should be specified in the format of list through the argument _hSet_, and the variable names in the list should be the same as those specified in the arguments _hNarmVar_, _hNpat.armVar_, _hWthVar_, _hTrtVecVar_. Across the three aims, the current trial parameter setting should be specified in the format of list through the argument _cSet_, and the variable names in the list should be the same as those specified in the arguments _cNarmVar_, _cNcluster.armVar_, _cNpat.clusterVar_, _cBtwVar_, _cWthVar_, _cTrtVecVar_.
+
+## Function **_print.pprMod()_**
+
+Function _print.pprMod()_ is a new print method for objects of class _pprMod_, which are returned by function _pprmodelBUGS()_. It has one new argument _Open.plot_. This argument determines whether to open the file _'graphics.pdf'_, which contains all convergence diagnostic plots. By default, the argument _Open.plot_ is set to be _TRUE_. 
+
+## Function **_AniPlot()_**
+
+Function _AniPlot()_ uses the function _saveLatex()_ in the **animation** package to create animation plot. The software _Adobe Acrobat_ and _MiKTeX_ must be installed to use this function. This function is useful in visualizing four dimensional data. The data to plot is specified in the format of data frame through argument _x_. It has four variables, including the X-axis variable, Y-axis variable, group variable and the variable defining different frames in an animation plot, which is called frame variable. The name of the four variables should be the same as those specified in the arguments _XVar_, _YVar_, _GroupVar_ and _FrameVar_, respectively. The limits of the X axis and Y axis in the animation plot are determined by the corresponding data ranges of the X-axis variable and the Y-axis variable, respectively. The data must be ordered by the group variable and the frame variable before it is used by function _AniPlot()_. The animation plot is output to a pdf file. The file name and directory could be specified by the arguments _imagename_ and _AniPlot.dir_, respectively. Additionally, the time interval to play each frame in the animation plot could be set by argument _play.int_.  
+
+This utility function is used to visualize the results returned by function _SimPower()_. For example, if we obtain the values of power of different power prior methods under different values of current and historical treatment effects by using function _SimPower()_, then we can treat the historical treatment effect as the X-axis variable, the value of power as the Y-axis variable, the method as the group variable and the current treatment effect as the frame variable, and order the values of power by the method and the current treatment effect, then apply function _AniPlot()_ to the ordered data to create an animation plot. This plot illustrates how the historical treatment effect impacts the power of different methods under different current treatment effects. 
+
+# Examples
+
+For the illustrative purpose of the functions above, we introduce two examples in this section. The first example includes two real HPV vaccine reminder trials: the Merck HPV vaccine reminder trial and the Szilagyi HPV vaccine reminder trial. First, we use function _pprmodelBUGS()_ to analyze Merck trial data by borrowing information from Szilagyi trial data, and then use function _print.pprMod()_ to print the results returned by _pprmodelBUGS()_. Second, we use function _SimPower()_ to design a cluster randomized trial with Szilagyi trial data. Finally, we apply function _AniPlot()_ to a non real data to create an animation plot. 
+
+## HPV vaccine reminder trials
+
+The HPV vaccine reminder trial sponsored by Merck pharmaceuticals is a cluster randomized trial that evaluates the effect of two reminder interventions on the uptake of the first dose of HPV vaccine in adolescents. In this trial, $28$ physicians are recruited. They are randomized to one of the three arms: the placebo arm and the two intervention arms. The electronic interventions are directly delivered to the physicians, and they remind the physicians that some patients in his/her clinic could take the first dose of HPV vaccine. All eligible patients are recruited from the clinics of these physicians. A patient is eligible if he/she is $11-14$ years old, and he/she has not received HPV vaccine before. The number of patients are different from physician to physician (i.e. from cluster to cluster). At the end of this trial, the arm status and the uptake status of the first dose of HPV vaccine are collected from each patient. The data are available in data frame _cdata_. For illustrative purposes, we collapse the two intervention arms into one arm, and compare it to the control arm. We aggregate the data by each physician, as shown in Table $1$.
+
+```{r, tidy = T, echo=F}
+mycdata <- pprincrt::cdata
+num.subj <- table(mycdata[,3])
+num.subjwithevent <- aggregate(mycdata[,1],by=list(mycdata[,3]),FUN=sum)
+trt.status <- aggregate(mycdata[,2],by=list(mycdata[,3]),FUN=unique)
+mycdata.new <- cbind(trt.status[,2],trt.status[,1], num.subj, num.subjwithevent[,2])
+colnames(mycdata.new) <- c("Intervention status","Physician ID","Number of subjects","Number of subjects taking vaccine")
+row.names(mycdata.new) <- NULL
+mycdata.new2 <- mycdata.new[order(mycdata.new[,1]),]
+```
+
+```{r, echo=FALSE, results='mycdata'}
+knitr::kable(mycdata.new2, caption="Merck HPV vaccine reminder trial")
+```
+
+The HPV vaccine reminder trial conducted by Szilagyi et al. [-@Szilagyi2011] is a simple randomized trial that evaluates the effect of one intervention on the uptake of the first dose of HPV vaccine in adolescents. In this trial, $2,139$ patients are recruited, and they are randomized to one of two arms: the placebo arm and the reminder intervention arm. A patient is eligible if she is $11-15$ years old, and she has not taken HPV vaccine before. The data from this trial come in a summary fashion. We only know the total number of patients and the number of patients taking the vaccine in each arm. The data are available in data frame _hdata_, and shown in Table $2$. 
+ 
+```{r, tidy = T, echo=F}
+myhdata <- pprincrt::hdata[,c(3,2,1)]
+colnames(myhdata) <- c("Intervention status","Number of subjects","Number of subjects taking vaccine")
+```
+
+```{r, echo=FALSE, results='myhdata'}
+knitr::kable(myhdata,caption="Szilagyi HPV vaccine reminder trial")
+```
+
+##  Animation data
+
+The animation data is a non-real data that has a total of $72$ observations. It has four different variables, including the group variable _group_, frame variable _frame_, X-axis variable _x_ and Y-axis variable _y_. The group and frame variables have $2$ and $6$ unique values, respectively. This data has been ordered by _group_ and _frame_ already. The data are available in data frame _anidata_, and could be accessed by the users with the statement _anidata_.
+
+# Package demonstration
+
+## Power prior analysis with function **_pprmodelBUGS()_**
+
+We treat the Merck and Szilagyi HPV vaccine reminder trials as the current and historical trials, respectively, and apply function _pprmodelBUGS()_ to them to perform a power prior analysis. We use the discounting parameter estimated with asymmetric KL divergence measure. This is done as follows,   
+
+```{r, tidy = T, echo=T}
+my.pprobject <- pprincrt::pprmodelBUGS(cData=pprincrt::cdata,cForm= y ~ x + (1|cl),
+                                       hData=pprincrt::hdata,hForm= y|n ~ x,                                       weight="asym",family="binomial",niter=2500,nburnin=1500,nthin=5,nchain=2)
+```
+
+It returns _my.pprobject_, which is a realization of the S3 object _pprMod_. Then we print it out as follows, 
+
+```{r, tidy = T, echo=T}
+print(my.pprobject,open.plot=T)
+```
+
+## Power prior design with function **_SimPower()_**
+
+We assume the Szilagyi HPV vaccine reminder trial is the historical trial, and we apply the function _SimPower()_ to it to design a cluster randomized trial. In this power prior design, we use the discounting parameter estimated by asymmetric KL divergence measure. The current trial setting is specified by _my.curset_. The following code estimates power for detecting a difference between _trt1_ and _trt2_: 
+
+```{r, tidy = T, echo=T}
+my.curset <- list(narm=2,ncluster.arm=rep(10,2),npat.cluster=rep(20,20),
+                  'trt1'=-0.1,'trt2 v.s. trt1'=log(4),sigma.b=1)
+mypower <- pprincrt::SimPower(family='binomial', to.do.option='real_SSD',cSet=my.curset,
+                    cTrtVecVar=c('trt1','trt2 v.s. trt1'),hData=pprincrt::hdata,weight='asym',
+                    nchain=1,niter=2500,nburnin=1500,nthin=5,file.rm=T, Rep=100)
+mypower
+```
+
+It returns the power of the design under the specified trial setting. For the purpose of illustration, we set _Rep_ to be $100$ to get a quick result. A larger value must be specified, such as $1,000$, if we want to obtain an accurate estimate of the power. Assuming the number of subjects within each cluster is fixed, we must increase the number of clusters within each arm and rerun the above code in the new trial setting if the returned power is smaller than our target, such as $0.8$. Otherwise, we must decrease it and repeat the process until the target power is reached. 
+
+## Animation plot with function **_AniPlot()_**
+
+We apply the function _AniPlot()_ to the animation data as follows,
+
+```{r, tidy = F, echo=T}
+pprincrt::AniPlot(pprincrt::anidata,imagename="AnimationImage"
+                  ,AniPlot.dir="C:/Users/shanxiao/Desktop/pprincrt/vignettes")
+```
+
+It generates a tex file, which is compiled into a pdf file containing the animation plot. Furthermore, the animation plot could be incorporated into this vignette file as follows, 
+
+```{r, eval=F, echo=T}
+\begin{figure}
+\centering
+\resizebox{0.8\textwidth}{!}{\begin{minipage}{\textwidth}
+\animategraphics[controls,width=\linewidth]{1}
+{C:/Users/shanxiao/Desktop/pprincrt/vignettes/AnimationImage}{}{}
+\caption{\small{A animation plot}}
+\end{minipage}}
+\end{figure}
+```
+
+\begin{figure}
+\centering
+\resizebox{0.8\textwidth}{!}{\begin{minipage}{\textwidth}
+\animategraphics[controls,width=\linewidth]{1}{C:/Users/shanxiao/Desktop/pprincrt/vignettes/AnimationImage}{}{}\caption{\small{A animation plot}}
+\end{minipage}}
+\end{figure}
+
+\newpage 
+
+# Ackowledgements
+
+I thank Dr. Gregory D. Zimet for allowing me to use his HPV vaccine reminder trial data for the testing of our method. 
+
+# References
+
+
+
+
